@@ -345,6 +345,45 @@ a:hover {
   margin-bottom: 20px;
 }
 
+.map-title {
+  align-items: flex-start;
+}
+
+.map-title-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 9px;
+}
+
+.mini-segmented {
+  display: inline-grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  overflow: hidden;
+  min-width: 178px;
+  border: 1px solid #c9c9bc;
+  border-radius: 7px;
+  background: #f1f1e9;
+  padding: 3px;
+}
+
+.mini-segmented button {
+  min-height: 30px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: #5c6258;
+  padding: 0 8px;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.mini-segmented button.active {
+  background: #17201c;
+  color: #fffdf4;
+}
+
 .map-canvas {
   flex: 1;
   position: relative;
@@ -452,6 +491,69 @@ a:hover {
   margin-top: 4px;
   color: #73796d;
   font-size: 13px;
+}
+
+.google-map-shell {
+  flex: 1;
+  position: relative;
+  min-height: 360px;
+  overflow: hidden;
+  border: 1px solid #cbd6d1;
+  border-radius: 8px;
+  background: #eaf0e7;
+}
+
+.google-map-canvas {
+  position: absolute;
+  inset: 0;
+}
+
+.google-map-overlay {
+  position: absolute;
+  right: 18px;
+  bottom: 18px;
+  left: 18px;
+  z-index: 2;
+  max-width: 420px;
+  border: 1px solid #d8d7cb;
+  border-radius: 8px;
+  background: rgba(255, 255, 251, 0.94);
+  box-shadow: 0 12px 26px rgba(45, 49, 42, 0.08);
+  padding: 13px 14px;
+}
+
+.google-map-overlay strong,
+.google-map-overlay span,
+.map-info-window strong,
+.map-info-window span {
+  display: block;
+}
+
+.google-map-overlay span {
+  margin-top: 4px;
+  color: #73796d;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.google-map-overlay.error {
+  border-color: #e2a16a;
+  background: rgba(255, 247, 231, 0.96);
+}
+
+.map-info-window {
+  max-width: 220px;
+  color: #17201c;
+  font: 13px/1.45 Arial, Helvetica, sans-serif;
+}
+
+.map-info-window strong {
+  margin-bottom: 5px;
+  font-size: 14px;
+}
+
+.map-info-window span {
+  color: #62685e;
 }
 
 .detail-panel {
@@ -746,7 +848,19 @@ td span {
     width: 100%;
   }
 
+  .map-title {
+    display: grid;
+  }
+
+  .map-title-actions {
+    justify-content: flex-start;
+  }
+
   .map-canvas {
+    min-height: 300px;
+  }
+
+  .google-map-shell {
     min-height: 300px;
   }
 

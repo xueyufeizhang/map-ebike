@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type Provider = "places" | "maps";
+type MapMode = "sketch" | "google";
 
 type Lead = {
   id: string;
@@ -27,6 +28,85 @@ type RegionOption = {
   name: string;
   cities: string[];
 };
+
+type GoogleLatLngLiteral = {
+  lat: number;
+  lng: number;
+};
+
+type GoogleMapStyle = {
+  featureType?: string;
+  elementType?: string;
+  stylers: Array<Record<string, string | number | boolean>>;
+};
+
+type GoogleMapOptions = {
+  center: GoogleLatLngLiteral;
+  zoom: number;
+  backgroundColor?: string;
+  disableDefaultUI?: boolean;
+  fullscreenControl?: boolean;
+  gestureHandling?: string;
+  mapTypeControl?: boolean;
+  streetViewControl?: boolean;
+  styles?: GoogleMapStyle[];
+  zoomControl?: boolean;
+};
+
+type GoogleMap = {
+  fitBounds(bounds: GoogleLatLngBounds): void;
+  setCenter(center: GoogleLatLngLiteral): void;
+  setZoom(zoom: number): void;
+};
+
+type GoogleLatLngBounds = {
+  extend(position: GoogleLatLngLiteral): void;
+};
+
+type GoogleMarker = {
+  addListener(eventName: string, handler: () => void): void;
+  setMap(map: GoogleMap | null): void;
+};
+
+type GoogleInfoWindow = {
+  open(options: { anchor: GoogleMarker; map: GoogleMap }): void;
+  setContent(content: string): void;
+};
+
+type GoogleMarkerOptions = {
+  icon?: {
+    fillColor: string;
+    fillOpacity: number;
+    path: number;
+    scale: number;
+    strokeColor: string;
+    strokeWeight: number;
+  };
+  map: GoogleMap;
+  position: GoogleLatLngLiteral;
+  title?: string;
+  zIndex?: number;
+};
+
+type GoogleMapsNamespace = {
+  maps: {
+    InfoWindow: new () => GoogleInfoWindow;
+    LatLngBounds: new () => GoogleLatLngBounds;
+    Map: new (element: HTMLElement, options: GoogleMapOptions) => GoogleMap;
+    Marker: new (options: GoogleMarkerOptions) => GoogleMarker;
+    SymbolPath: { CIRCLE: number };
+  };
+};
+
+declare global {
+  interface Window {
+    __italyLeadGoogleMaps?: {
+      key: string;
+      promise: Promise<void>;
+    };
+    google?: GoogleMapsNamespace;
+  }
+}
 
 const defaultKeywords = [
   "e-bike shop",
@@ -295,8 +375,286 @@ function mapPosition(lead: Lead) {
   };
 }
 
+const googleMapStyles: GoogleMapStyle[] = [
+  {
+    featureType: "administrative",
+    elementType: "geometry",
+    stylers: [{ color: "#d8d7cb" }],
+  },
+  {
+    featureType: "landscape",
+    elementType: "geometry",
+    stylers: [{ color: "#f2f3ea" }],
+  },
+  {
+    featureType: "poi",
+    stylers: [{ visibility: "off" }],
+  },
+  {
+    featureType: "road",
+    elementType: "geometry",
+    stylers: [{ color: "#ffffff" }],
+  },
+  {
+    featureType: "road",
+    elementType: "labels.text.fill",
+    stylers: [{ color: "#6d715f" }],
+  },
+  {
+    featureType: "transit",
+    stylers: [{ visibility: "off" }],
+  },
+  {
+    featureType: "water",
+    elementType: "geometry",
+    stylers: [{ color: "#cbdedc" }],
+  },
+  {
+    featureType: "water",
+    elementType: "labels.text.fill",
+    stylers: [{ color: "#587571" }],
+  },
+];
+
+function escapeHtml(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function loadGoogleMaps(apiKey: string, languageCode: string) {
+  if (typeof window === "undefined") {
+    return Promise.reject(new Error("Google Maps 只能在浏览器中加载。"));
+  }
+
+  if (window.google?.maps) {
+    return Promise.resolve();
+  }
+
+  const cacheKey = `${apiKey}:${languageCode}`;
+  if (window.__italyLeadGoogleMaps?.key === cacheKey) {
+    return window.__italyLeadGoogleMaps.promise;
+  }
+
+  document.getElementById("italy-leads-google-maps")?.remove();
+
+  const promise = new Promise<void>((resolve, reject) => {
+    const script = document.createElement("script");
+    script.id = "italy-leads-google-maps";
+    script.async = true;
+    script.defer = true;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(
+      apiKey
+    )}&v=weekly&loading=async&language=${encodeURIComponent(languageCode)}&region=IT`;
+    script.onload = () => {
+      if (window.google?.maps) {
+        resolve();
+      } else {
+        reject(new Error("Google Maps 没有正确加载。"));
+      }
+    };
+    script.onerror = () => reject(new Error("Google Maps 加载失败。"));
+    document.head.appendChild(script);
+  });
+
+  window.__italyLeadGoogleMaps = { key: cacheKey, promise };
+  return promise;
+}
+
+function mapInfoContent(lead: Lead) {
+  return `
+    <div class="map-info-window">
+      <strong>${escapeHtml(lead.name)}</strong>
+      <span>${escapeHtml(lead.address || "地址为空")}</span>
+      <span>${escapeHtml(lead.phone || lead.internationalPhone || "电话为空")}</span>
+    </div>
+  `;
+}
+
+function GoogleResultsMap({
+  apiKey,
+  languageCode,
+  leads,
+  selectedLeadId,
+  onSelectLead,
+}: {
+  apiKey: string;
+  languageCode: string;
+  leads: Lead[];
+  selectedLeadId: string;
+  onSelectLead: (leadId: string) => void;
+}) {
+  const mapElementRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<GoogleMap | null>(null);
+  const markersRef = useRef<GoogleMarker[]>([]);
+  const infoWindowRef = useRef<GoogleInfoWindow | null>(null);
+  const lastAutoFitKeyRef = useRef("");
+  const [mapError, setMapError] = useState("");
+
+  const trimmedApiKey = apiKey.trim();
+  const mappableLeads = useMemo(
+    () =>
+      leads.filter(
+        (lead) => typeof lead.lat === "number" && typeof lead.lng === "number"
+      ),
+    [leads]
+  );
+  const leadSetKey = useMemo(
+    () => mappableLeads.map((lead) => `${lead.id}:${lead.lat}:${lead.lng}`).join("|"),
+    [mappableLeads]
+  );
+
+  useEffect(() => {
+    if (!trimmedApiKey) return;
+
+    let cancelled = false;
+
+    loadGoogleMaps(trimmedApiKey, languageCode)
+      .then(() => {
+        if (cancelled || !mapElementRef.current || !window.google?.maps) return;
+
+        const maps = window.google.maps;
+        if (!mapRef.current) {
+          mapRef.current = new maps.Map(mapElementRef.current, {
+            backgroundColor: "#eaf0e7",
+            center: { lat: 42.8, lng: 12.5 },
+            disableDefaultUI: true,
+            fullscreenControl: false,
+            gestureHandling: "greedy",
+            mapTypeControl: false,
+            streetViewControl: false,
+            styles: googleMapStyles,
+            zoom: 5,
+            zoomControl: true,
+          });
+        }
+
+        markersRef.current.forEach((marker) => marker.setMap(null));
+        markersRef.current = [];
+
+        if (!infoWindowRef.current) {
+          infoWindowRef.current = new maps.InfoWindow();
+        }
+
+        const bounds = new maps.LatLngBounds();
+        let selectedMarker: GoogleMarker | null = null;
+        let selectedPosition: GoogleLatLngLiteral | null = null;
+        let selectedLead: Lead | null = null;
+
+        mappableLeads.forEach((lead) => {
+          const position = {
+            lat: lead.lat ?? 0,
+            lng: lead.lng ?? 0,
+          };
+          const isSelected = lead.id === selectedLeadId;
+
+          bounds.extend(position);
+
+          const marker = new maps.Marker({
+            icon: {
+              fillColor: isSelected ? "#0f766e" : "#c06f30",
+              fillOpacity: 1,
+              path: maps.SymbolPath.CIRCLE,
+              scale: isSelected ? 8 : 6,
+              strokeColor: "#fffdf4",
+              strokeWeight: 2,
+            },
+            map: mapRef.current,
+            position,
+            title: lead.name,
+            zIndex: isSelected ? 2 : 1,
+          });
+
+          marker.addListener("click", () => {
+            onSelectLead(lead.id);
+            mapRef.current?.setCenter(position);
+            mapRef.current?.setZoom(14);
+            infoWindowRef.current?.setContent(mapInfoContent(lead));
+            if (mapRef.current) {
+              infoWindowRef.current?.open({ anchor: marker, map: mapRef.current });
+            }
+          });
+
+          if (isSelected) {
+            selectedMarker = marker;
+            selectedPosition = position;
+            selectedLead = lead;
+          }
+
+          markersRef.current.push(marker);
+        });
+
+        const shouldAutoFit = leadSetKey !== lastAutoFitKeyRef.current;
+        if (shouldAutoFit && mappableLeads.length > 1) {
+          mapRef.current.fitBounds(bounds);
+        } else if (shouldAutoFit && mappableLeads.length === 1) {
+          mapRef.current.setCenter({
+            lat: mappableLeads[0].lat ?? 42.8,
+            lng: mappableLeads[0].lng ?? 12.5,
+          });
+          mapRef.current.setZoom(13);
+        } else if (shouldAutoFit) {
+          mapRef.current.setCenter({ lat: 42.8, lng: 12.5 });
+          mapRef.current.setZoom(5);
+        } else if (selectedMarker && selectedPosition && selectedLead) {
+          mapRef.current.setCenter(selectedPosition);
+          mapRef.current.setZoom(14);
+          infoWindowRef.current?.setContent(mapInfoContent(selectedLead));
+          infoWindowRef.current?.open({ anchor: selectedMarker, map: mapRef.current });
+        }
+
+        lastAutoFitKeyRef.current = leadSetKey;
+        setMapError("");
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setMapError("Google Map 加载失败，请检查 Maps JavaScript API 是否已启用。");
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    languageCode,
+    leadSetKey,
+    mappableLeads,
+    onSelectLead,
+    selectedLeadId,
+    trimmedApiKey,
+  ]);
+
+  return (
+    <div className="google-map-shell">
+      <div ref={mapElementRef} className="google-map-canvas" />
+      {!trimmedApiKey ? (
+        <div className="google-map-overlay">
+          <strong>需要 Google API key</strong>
+          <span>在搜索来源里选择 Places API 输入 key 后，就能切到真实地图。</span>
+        </div>
+      ) : null}
+      {trimmedApiKey && !mappableLeads.length ? (
+        <div className="google-map-overlay">
+          <strong>还没有坐标</strong>
+          <span>搜索或载入示例数据后，带坐标的商家会显示在地图上。</span>
+        </div>
+      ) : null}
+      {mapError ? (
+        <div className="google-map-overlay error">
+          <strong>地图加载失败</strong>
+          <span>{mapError}</span>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export default function Home() {
   const [provider, setProvider] = useState<Provider>("places");
+  const [mapMode, setMapMode] = useState<MapMode>("sketch");
   const [apiKey, setApiKey] = useState(() => {
     if (typeof window === "undefined") return "";
     return window.localStorage.getItem("places_api_key") ?? "";
@@ -819,34 +1177,62 @@ export default function Home() {
         <section className="space-y-5">
           <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
             <div className="panel map-panel">
-              <div className="section-title">
+              <div className="section-title map-title">
                 <span>意大利点位</span>
-                <span className="subtle">{filteredLeads.length} 个商家</span>
-              </div>
-              <div className="map-canvas" aria-label="搜索结果地图示意">
-                <div className="map-label milan">Milano</div>
-                <div className="map-label torino">Torino</div>
-                <div className="map-label veneto">Veneto</div>
-                <div className="map-label liguria">Liguria</div>
-                {filteredLeads.map((lead) => (
-                  <button
-                    key={lead.id}
-                    className={`map-pin ${selectedLead?.id === lead.id ? "selected" : ""}`}
-                    style={mapPosition(lead)}
-                    type="button"
-                    title={lead.name}
-                    onClick={() => setSelectedId(lead.id)}
-                  >
-                    <span />
-                  </button>
-                ))}
-                {!filteredLeads.length ? (
-                  <div className="empty-map">
-                    <strong>等待搜索结果</strong>
-                    <span>先输入 API key，然后搜索米兰、都灵等地区。</span>
+                <div className="map-title-actions">
+                  <span className="subtle">{filteredLeads.length} 个商家</span>
+                  <div className="mini-segmented" role="radiogroup" aria-label="地图模式">
+                    <button
+                      className={mapMode === "sketch" ? "active" : ""}
+                      type="button"
+                      onClick={() => setMapMode("sketch")}
+                    >
+                      示意图
+                    </button>
+                    <button
+                      className={mapMode === "google" ? "active" : ""}
+                      type="button"
+                      onClick={() => setMapMode("google")}
+                    >
+                      Google Map
+                    </button>
                   </div>
-                ) : null}
+                </div>
               </div>
+              {mapMode === "sketch" ? (
+                <div className="map-canvas" aria-label="搜索结果地图示意">
+                  <div className="map-label milan">Milano</div>
+                  <div className="map-label torino">Torino</div>
+                  <div className="map-label veneto">Veneto</div>
+                  <div className="map-label liguria">Liguria</div>
+                  {filteredLeads.map((lead) => (
+                    <button
+                      key={lead.id}
+                      className={`map-pin ${selectedLead?.id === lead.id ? "selected" : ""}`}
+                      style={mapPosition(lead)}
+                      type="button"
+                      title={lead.name}
+                      onClick={() => setSelectedId(lead.id)}
+                    >
+                      <span />
+                    </button>
+                  ))}
+                  {!filteredLeads.length ? (
+                    <div className="empty-map">
+                      <strong>等待搜索结果</strong>
+                      <span>先搜索或载入示例数据，点位会显示在这里。</span>
+                    </div>
+                  ) : null}
+                </div>
+              ) : (
+                <GoogleResultsMap
+                  apiKey={apiKey}
+                  languageCode={languageCode}
+                  leads={filteredLeads}
+                  selectedLeadId={selectedLead?.id ?? ""}
+                  onSelectLead={setSelectedId}
+                />
+              )}
             </div>
 
             <div className="panel detail-panel">
