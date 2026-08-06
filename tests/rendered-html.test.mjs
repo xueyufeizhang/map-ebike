@@ -38,9 +38,9 @@ test("server-renders the e-bike lead finder shell", async () => {
   assert.match(html, /每页显示/);
   assert.match(html, /筛选/);
   assert.match(html, /商家名单/);
-  assert.match(html, /示意图/);
-  assert.match(html, /Google Map/);
+  assert.match(html, /需要 Google API key/);
   assert.doesNotMatch(html, /加入热门/);
+  assert.doesNotMatch(html, /示意图/);
   assert.doesNotMatch(html, /codex-preview|SkeletonPreview|react-loading-skeleton/);
 });
 

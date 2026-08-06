@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 type Provider = "places" | "maps";
-type MapMode = "sketch" | "google";
 
 type Lead = {
   id: string;
@@ -364,17 +363,6 @@ function compactStatus(status: string) {
   return status.replaceAll("_", " ").toLowerCase();
 }
 
-function mapPosition(lead: Lead) {
-  const lat = lead.lat ?? 45.4;
-  const lng = lead.lng ?? 9.2;
-  const x = ((lng - 6.2) / (13.2 - 6.2)) * 100;
-  const y = (1 - (lat - 43.5) / (46.8 - 43.5)) * 100;
-  return {
-    left: `${Math.min(94, Math.max(6, x))}%`,
-    top: `${Math.min(90, Math.max(8, y))}%`,
-  };
-}
-
 const googleMapStyles: GoogleMapStyle[] = [
   {
     featureType: "administrative",
@@ -654,7 +642,6 @@ function GoogleResultsMap({
 
 export default function Home() {
   const [provider, setProvider] = useState<Provider>("places");
-  const [mapMode, setMapMode] = useState<MapMode>("sketch");
   const [apiKey, setApiKey] = useState(() => {
     if (typeof window === "undefined") return "";
     return window.localStorage.getItem("places_api_key") ?? "";
@@ -1179,60 +1166,15 @@ export default function Home() {
             <div className="panel map-panel">
               <div className="section-title map-title">
                 <span>意大利点位</span>
-                <div className="map-title-actions">
-                  <span className="subtle">{filteredLeads.length} 个商家</span>
-                  <div className="mini-segmented" role="radiogroup" aria-label="地图模式">
-                    <button
-                      className={mapMode === "sketch" ? "active" : ""}
-                      type="button"
-                      onClick={() => setMapMode("sketch")}
-                    >
-                      示意图
-                    </button>
-                    <button
-                      className={mapMode === "google" ? "active" : ""}
-                      type="button"
-                      onClick={() => setMapMode("google")}
-                    >
-                      Google Map
-                    </button>
-                  </div>
-                </div>
+                <span className="subtle">{filteredLeads.length} 个商家</span>
               </div>
-              {mapMode === "sketch" ? (
-                <div className="map-canvas" aria-label="搜索结果地图示意">
-                  <div className="map-label milan">Milano</div>
-                  <div className="map-label torino">Torino</div>
-                  <div className="map-label veneto">Veneto</div>
-                  <div className="map-label liguria">Liguria</div>
-                  {filteredLeads.map((lead) => (
-                    <button
-                      key={lead.id}
-                      className={`map-pin ${selectedLead?.id === lead.id ? "selected" : ""}`}
-                      style={mapPosition(lead)}
-                      type="button"
-                      title={lead.name}
-                      onClick={() => setSelectedId(lead.id)}
-                    >
-                      <span />
-                    </button>
-                  ))}
-                  {!filteredLeads.length ? (
-                    <div className="empty-map">
-                      <strong>等待搜索结果</strong>
-                      <span>先搜索或载入示例数据，点位会显示在这里。</span>
-                    </div>
-                  ) : null}
-                </div>
-              ) : (
-                <GoogleResultsMap
-                  apiKey={apiKey}
-                  languageCode={languageCode}
-                  leads={filteredLeads}
-                  selectedLeadId={selectedLead?.id ?? ""}
-                  onSelectLead={setSelectedId}
-                />
-              )}
+              <GoogleResultsMap
+                apiKey={apiKey}
+                languageCode={languageCode}
+                leads={filteredLeads}
+                selectedLeadId={selectedLead?.id ?? ""}
+                onSelectLead={setSelectedId}
+              />
             </div>
 
             <div className="panel detail-panel">
