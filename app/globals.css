@@ -129,6 +129,12 @@ a:hover {
   box-shadow: 0 6px 14px rgba(23, 32, 28, 0.18);
 }
 
+.source-settings {
+  margin-top: 14px;
+  border-top: 1px solid #ebeae2;
+  padding-top: 2px;
+}
+
 .field-label {
   display: block;
   margin: 12px 0 7px;

@@ -469,14 +469,7 @@ export default function Home() {
   async function runSearch() {
     setMessage("");
 
-    if (provider === "maps") {
-      setMessage(
-        "Google Maps 网页模式已预留入口，但第一版不会自动抓取网页。建议先使用 Places API；网页抓取容易不稳定，也需要你确认合规和频率限制。"
-      );
-      return;
-    }
-
-    if (!apiKey.trim()) {
+    if (provider === "places" && !apiKey.trim()) {
       setMessage("请先输入 Google Places API key。");
       return;
     }
@@ -493,11 +486,12 @@ export default function Home() {
     setSelectedId("");
 
     try {
-      const response = await fetch("/api/search", {
+      const endpoint = provider === "places" ? "/api/search" : "/api/search-maps";
+      const response = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          apiKey: apiKey.trim(),
+          apiKey: provider === "places" ? apiKey.trim() : undefined,
           keywords: keywordList,
           areas: areaList,
           pages: 2,
@@ -507,17 +501,20 @@ export default function Home() {
 
       const payload = (await response.json()) as {
         leads?: Lead[];
+        warnings?: string[];
         error?: string;
       };
 
       if (!response.ok) {
-        throw new Error(payload.error || "搜索失败，请检查 API key 和 Google Cloud 配置。");
+        throw new Error(payload.error || "搜索失败，请检查搜索设置。");
       }
 
       setLeads(payload.leads ?? []);
       setMessage(
         payload.leads?.length
-          ? `搜索完成，已整理 ${payload.leads.length} 家商家。`
+          ? `搜索完成，已整理 ${payload.leads.length} 家商家。${
+              payload.warnings?.length ? ` ${payload.warnings.length} 组搜索遇到网页限制。` : ""
+            }`
           : "搜索完成，但没有找到结果。可以扩大地区或换关键词。"
       );
     } catch (error) {
@@ -652,35 +649,32 @@ export default function Home() {
             </div>
             {provider === "maps" ? (
               <p className="mt-3 rounded-md border border-[#f0b35b] bg-[#fff7e7] px-3 py-2 text-sm leading-5 text-[#7a4d08]">
-                网页模式已预留。直接抓取 Google Maps 页面通常不稳定，并可能受到 Google 条款、验证码和频率限制影响；第一版先不自动执行。
+                实验模式：不需要 API key，但 Google Maps 网页可能限制访问，电话和地址也不一定能提取完整。
               </p>
             ) : null}
-          </div>
-
-          <div className="panel">
-            <div className="section-title">
-              <span>API 设置</span>
-            </div>
-            <label className="field-label" htmlFor="apiKey">
-              Google Places API key
-            </label>
-            <input
-              id="apiKey"
-              className="input"
-              type="password"
-              value={apiKey}
-              onChange={(event) => setApiKey(event.target.value)}
-              placeholder="AIza..."
-              disabled={provider !== "places"}
-            />
-            <label className="check-row">
-              <input
-                type="checkbox"
-                checked={rememberKey}
-                onChange={(event) => setRememberKey(event.target.checked)}
-              />
-              <span>只保存在这台电脑的浏览器中</span>
-            </label>
+            {provider === "places" ? (
+              <div className="source-settings">
+                <label className="field-label" htmlFor="apiKey">
+                  Google Places API key
+                </label>
+                <input
+                  id="apiKey"
+                  className="input"
+                  type="password"
+                  value={apiKey}
+                  onChange={(event) => setApiKey(event.target.value)}
+                  placeholder="AIza..."
+                />
+                <label className="check-row">
+                  <input
+                    type="checkbox"
+                    checked={rememberKey}
+                    onChange={(event) => setRememberKey(event.target.checked)}
+                  />
+                  <span>只保存在这台电脑的浏览器中</span>
+                </label>
+              </div>
+            ) : null}
           </div>
 
           <div className="panel">

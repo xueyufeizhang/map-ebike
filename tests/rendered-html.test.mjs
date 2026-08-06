@@ -58,6 +58,21 @@ test("search route validates missing Google Places API key", async () => {
   assert.match(payload.error, /API key/i);
 });
 
+test("maps web route validates required search inputs", async () => {
+  const response = await request("/api/search-maps", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      keywords: [],
+      areas: [],
+    }),
+  });
+
+  assert.equal(response.status, 400);
+  const payload = await response.json();
+  assert.match(payload.error, /keyword/i);
+});
+
 test("xlsx export route returns a workbook download", async () => {
   const response = await request("/api/export-xlsx", {
     method: "POST",
