@@ -38,3 +38,9 @@ yarn-error.log*
 /.wrangler/
 /outputs/
 /work/
+
+# local exports
+*.xlsx
+*.xls
+*.local.csv
+exports/
