@@ -22,13 +22,6 @@ type Lead = {
   matchedAreas: string[];
 };
 
-type SearchSummary = {
-  queryCount: number;
-  pagesFetched: number;
-  rawResults: number;
-  duplicatesRemoved: number;
-};
-
 type RegionOption = {
   id: string;
   name: string;
@@ -47,15 +40,6 @@ const defaultKeywords = [
 const defaultAreas = [
   "Milano, Lombardia, Italy",
   "Torino, Piemonte, Italy",
-  "Bergamo, Lombardia, Italy",
-  "Brescia, Lombardia, Italy",
-  "Verona, Veneto, Italy",
-  "Padova, Veneto, Italy",
-  "Venezia, Veneto, Italy",
-  "Bologna, Emilia-Romagna, Italy",
-  "Genova, Liguria, Italy",
-  "Trento, Trentino-Alto Adige, Italy",
-  "Bolzano, Trentino-Alto Adige, Italy",
 ].join("\n");
 
 const northItalyRegions: RegionOption[] = [
@@ -283,9 +267,10 @@ export default function Home() {
   const [areas, setAreas] = useState(defaultAreas);
   const [selectedRegionId, setSelectedRegionId] = useState(northItalyRegions[0].id);
   const [selectedCity, setSelectedCity] = useState(northItalyRegions[0].cities[0]);
-  const [pages, setPages] = useState(2);
   const [languageCode, setLanguageCode] = useState("it");
   const [query, setQuery] = useState("");
+  const [rowsPerPage, setRowsPerPage] = useState(25);
+  const [currentPage, setCurrentPage] = useState(1);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [areaFilter, setAreaFilter] = useState("all");
   const [keywordFilter, setKeywordFilter] = useState("all");
@@ -294,7 +279,6 @@ export default function Home() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [minRating, setMinRating] = useState("all");
   const [leads, setLeads] = useState<Lead[]>([]);
-  const [summary, setSummary] = useState<SearchSummary | null>(null);
   const [selectedId, setSelectedId] = useState<string>("");
   const [isSearching, setIsSearching] = useState(false);
   const [message, setMessage] = useState("");
@@ -388,6 +372,17 @@ export default function Home() {
   const selectedLead =
     filteredLeads.find((lead) => lead.id === selectedId) ?? filteredLeads[0];
 
+  const totalPages = Math.max(1, Math.ceil(filteredLeads.length / rowsPerPage));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const paginatedLeads = filteredLeads.slice(
+    (safeCurrentPage - 1) * rowsPerPage,
+    safeCurrentPage * rowsPerPage
+  );
+  const pageStart = filteredLeads.length
+    ? (safeCurrentPage - 1) * rowsPerPage + 1
+    : 0;
+  const pageEnd = Math.min(safeCurrentPage * rowsPerPage, filteredLeads.length);
+
   const stats = useMemo(() => {
     const withPhone = leads.filter((lead) => lead.phone || lead.internationalPhone).length;
     const withWebsite = leads.filter((lead) => lead.website).length;
@@ -426,6 +421,7 @@ export default function Home() {
     setWebsiteFilter("all");
     setStatusFilter("all");
     setMinRating("all");
+    setCurrentPage(1);
   }
 
   async function runSearch() {
@@ -452,7 +448,6 @@ export default function Home() {
     }
 
     setIsSearching(true);
-    setSummary(null);
     setSelectedId("");
 
     try {
@@ -463,14 +458,13 @@ export default function Home() {
           apiKey: apiKey.trim(),
           keywords: keywordList,
           areas: areaList,
-          pages,
+          pages: 2,
           languageCode,
         }),
       });
 
       const payload = (await response.json()) as {
         leads?: Lead[];
-        summary?: SearchSummary;
         error?: string;
       };
 
@@ -479,7 +473,6 @@ export default function Home() {
       }
 
       setLeads(payload.leads ?? []);
-      setSummary(payload.summary ?? null);
       setMessage(
         payload.leads?.length
           ? `搜索完成，已整理 ${payload.leads.length} 家商家。`
@@ -532,7 +525,7 @@ export default function Home() {
     const csv = [headers, ...rows].map((row) => row.map(csvEscape).join(",")).join("\n");
     downloadBlob(
       new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" }),
-      "north-italy-ebike-leads.csv"
+      "italy-ebike-leads.csv"
     );
   }
 
@@ -549,7 +542,7 @@ export default function Home() {
     }
 
     const blob = await response.blob();
-    downloadBlob(blob, "north-italy-ebike-leads.xlsx");
+    downloadBlob(blob, "italy-ebike-leads.xlsx");
   }
 
   return (
@@ -558,7 +551,7 @@ export default function Home() {
         <div className="mx-auto flex max-w-7xl flex-col gap-5 px-5 py-6 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="text-sm font-semibold uppercase tracking-wide text-[#6d715f]">
-              Northern Italy e-bike lead finder
+              Italy e-bike lead finder
             </p>
             <h1 className="mt-2 text-3xl font-semibold text-[#17201c] sm:text-4xl">
               电动自行车商家搜索台
@@ -705,12 +698,12 @@ export default function Home() {
                 >
                   加入该大区
                 </button>
-              <button
-                className="ghost-button"
-                type="button"
-                onClick={() => setAreas("")}
-              >
-                清空
+                <button
+                  className="ghost-button"
+                  type="button"
+                  onClick={() => setAreas("")}
+                >
+                  清空
                 </button>
               </div>
               <div className="selected-areas" aria-label="已选地区">
@@ -737,19 +730,7 @@ export default function Home() {
               }
               rows={5}
             />
-            <div className="mt-3 grid grid-cols-2 gap-3">
-              <label>
-                <span className="field-label">每组最多页数</span>
-                <select
-                  className="input"
-                  value={pages}
-                  onChange={(event) => setPages(Number(event.target.value))}
-                >
-                  <option value={1}>1 页</option>
-                  <option value={2}>2 页</option>
-                  <option value={3}>3 页</option>
-                </select>
-              </label>
+            <div className="mt-3">
               <label>
                 <span className="field-label">语言</span>
                 <select
@@ -776,12 +757,6 @@ export default function Home() {
               type="button"
               onClick={() => {
                 setLeads(sampleLeads);
-                setSummary({
-                  queryCount: 3,
-                  pagesFetched: 3,
-                  rawResults: 3,
-                  duplicatesRemoved: 0,
-                });
                 setMessage("已载入示例数据，用于预览界面和测试导出。");
               }}
             >
@@ -795,7 +770,7 @@ export default function Home() {
           <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
             <div className="panel map-panel">
               <div className="section-title">
-                <span>北意大利点位</span>
+                <span>意大利点位</span>
                 <span className="subtle">{filteredLeads.length} 个商家</span>
               </div>
               <div className="map-canvas" aria-label="搜索结果地图示意">
@@ -874,20 +849,32 @@ export default function Home() {
                 <div className="section-title table-title">
                   <span>商家名单</span>
                 </div>
-                {summary ? (
-                  <p className="subtle">
-                    查询 {summary.queryCount} 组，翻页 {summary.pagesFetched} 次，去重{" "}
-                    {summary.duplicatesRemoved} 条。
-                  </p>
-                ) : null}
               </div>
               <div className="toolbar-actions">
                 <input
                   className="search-input"
                   value={query}
-                  onChange={(event) => setQuery(event.target.value)}
+                  onChange={(event) => {
+                    setQuery(event.target.value);
+                    setCurrentPage(1);
+                  }}
                   placeholder="筛选名称、地址、关键词"
                 />
+                <label className="page-size-control">
+                  <span>每页显示</span>
+                  <select
+                    value={rowsPerPage}
+                    onChange={(event) => {
+                      setRowsPerPage(Number(event.target.value));
+                      setCurrentPage(1);
+                    }}
+                  >
+                    <option value={10}>10 条</option>
+                    <option value={25}>25 条</option>
+                    <option value={50}>50 条</option>
+                    <option value={100}>100 条</option>
+                  </select>
+                </label>
                 <button
                   className={`filter-toggle ${filtersOpen ? "active" : ""}`}
                   type="button"
@@ -928,7 +915,10 @@ export default function Home() {
                     <select
                       className="input"
                       value={areaFilter}
-                      onChange={(event) => setAreaFilter(event.target.value)}
+                      onChange={(event) => {
+                        setAreaFilter(event.target.value);
+                        setCurrentPage(1);
+                      }}
                     >
                       <option value="all">全部地区</option>
                       {filterOptions.areas.map((area) => (
@@ -943,7 +933,10 @@ export default function Home() {
                     <select
                       className="input"
                       value={keywordFilter}
-                      onChange={(event) => setKeywordFilter(event.target.value)}
+                      onChange={(event) => {
+                        setKeywordFilter(event.target.value);
+                        setCurrentPage(1);
+                      }}
                     >
                       <option value="all">全部关键词</option>
                       {filterOptions.keywords.map((keyword) => (
@@ -958,7 +951,10 @@ export default function Home() {
                     <select
                       className="input"
                       value={phoneFilter}
-                      onChange={(event) => setPhoneFilter(event.target.value)}
+                      onChange={(event) => {
+                        setPhoneFilter(event.target.value);
+                        setCurrentPage(1);
+                      }}
                     >
                       <option value="all">全部</option>
                       <option value="with">有电话</option>
@@ -970,7 +966,10 @@ export default function Home() {
                     <select
                       className="input"
                       value={websiteFilter}
-                      onChange={(event) => setWebsiteFilter(event.target.value)}
+                      onChange={(event) => {
+                        setWebsiteFilter(event.target.value);
+                        setCurrentPage(1);
+                      }}
                     >
                       <option value="all">全部</option>
                       <option value="with">有网站</option>
@@ -982,7 +981,10 @@ export default function Home() {
                     <select
                       className="input"
                       value={minRating}
-                      onChange={(event) => setMinRating(event.target.value)}
+                      onChange={(event) => {
+                        setMinRating(event.target.value);
+                        setCurrentPage(1);
+                      }}
                     >
                       <option value="all">不限</option>
                       <option value="4.5">4.5+</option>
@@ -995,7 +997,10 @@ export default function Home() {
                     <select
                       className="input"
                       value={statusFilter}
-                      onChange={(event) => setStatusFilter(event.target.value)}
+                      onChange={(event) => {
+                        setStatusFilter(event.target.value);
+                        setCurrentPage(1);
+                      }}
                     >
                       <option value="all">全部状态</option>
                       {filterOptions.statuses.map((status) => (
@@ -1021,7 +1026,7 @@ export default function Home() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredLeads.map((lead) => (
+                  {paginatedLeads.map((lead) => (
                     <tr
                       key={lead.id}
                       className={selectedLead?.id === lead.id ? "selected-row" : ""}
@@ -1061,6 +1066,36 @@ export default function Home() {
                 </tbody>
               </table>
             </div>
+            {filteredLeads.length ? (
+              <div className="pagination-bar">
+                <span>
+                  显示 {pageStart}-{pageEnd} / {filteredLeads.length}
+                </span>
+                <div>
+                  <button
+                    className="ghost-button"
+                    type="button"
+                    onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                    disabled={safeCurrentPage === 1}
+                  >
+                    上一页
+                  </button>
+                  <strong>
+                    {safeCurrentPage} / {totalPages}
+                  </strong>
+                  <button
+                    className="ghost-button"
+                    type="button"
+                    onClick={() =>
+                      setCurrentPage((page) => Math.min(totalPages, page + 1))
+                    }
+                    disabled={safeCurrentPage === totalPages}
+                  >
+                    下一页
+                  </button>
+                </div>
+              </div>
+            ) : null}
           </div>
         </section>
       </section>

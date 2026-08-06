@@ -524,13 +524,13 @@ a:hover {
 
 .toolbar {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 16px;
 }
 
 .table-title {
-  margin-bottom: 4px;
+  margin-bottom: 0;
 }
 
 .toolbar-actions {
@@ -552,6 +552,33 @@ a:hover {
   color: #17201c;
   padding: 0 12px;
   font-size: 14px;
+  font-weight: 800;
+}
+
+.page-size-control {
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #c9c9bc;
+  border-radius: 7px;
+  background: #ffffff;
+  color: #5c6258;
+  padding: 0 8px 0 11px;
+  white-space: nowrap;
+}
+
+.page-size-control span {
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.page-size-control select {
+  height: 30px;
+  border: 0;
+  background: transparent;
+  color: #17201c;
+  outline: none;
   font-weight: 800;
 }
 
@@ -604,6 +631,31 @@ a:hover {
 .table-wrap {
   margin-top: 14px;
   overflow-x: auto;
+}
+
+.pagination-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 13px;
+  border-top: 1px solid #ebeae2;
+  padding-top: 13px;
+  color: #73796d;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.pagination-bar div {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.pagination-bar strong {
+  min-width: 52px;
+  color: #17201c;
+  text-align: center;
 }
 
 table {
@@ -667,6 +719,11 @@ td span {
     margin-top: 12px;
   }
 
+  .page-size-control {
+    width: 100%;
+    justify-content: space-between;
+  }
+
   .filter-grid {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -677,6 +734,11 @@ td span {
 
   .map-canvas {
     min-height: 300px;
+  }
+
+  .pagination-bar {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }
 

@@ -29,12 +29,13 @@ test("server-renders the e-bike lead finder shell", async () => {
   assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
 
   const html = await response.text();
-  assert.match(html, /<title>Northern Italy E-Bike Lead Finder<\/title>/i);
+  assert.match(html, /<title>Italy E-Bike Lead Finder<\/title>/i);
   assert.match(html, /电动自行车商家搜索台/);
   assert.match(html, /Places API/);
   assert.match(html, /Maps 网页/);
   assert.match(html, /地区选择/);
   assert.match(html, /Lombardia/);
+  assert.match(html, /每页显示/);
   assert.match(html, /筛选/);
   assert.match(html, /商家名单/);
   assert.doesNotMatch(html, /加入热门/);

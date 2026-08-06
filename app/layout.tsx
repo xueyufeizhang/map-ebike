@@ -13,9 +13,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Northern Italy E-Bike Lead Finder",
+  title: "Italy E-Bike Lead Finder",
   description:
-    "Search Google Places for e-bike businesses in Northern Italy and export phone leads.",
+    "Search Google Places for e-bike businesses in Italy and export phone leads.",
   icons: {
     icon: "/favicon.svg",
     shortcut: "/favicon.svg",
