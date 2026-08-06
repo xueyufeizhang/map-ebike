@@ -330,10 +330,17 @@ a:hover {
 }
 
 .map-panel {
+  display: flex;
+  flex-direction: column;
   min-height: 426px;
 }
 
+.map-panel .section-title {
+  margin-bottom: 20px;
+}
+
 .map-canvas {
+  flex: 1;
   position: relative;
   min-height: 360px;
   overflow: hidden;
