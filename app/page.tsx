@@ -29,6 +29,12 @@ type SearchSummary = {
   duplicatesRemoved: number;
 };
 
+type RegionOption = {
+  id: string;
+  name: string;
+  cities: string[];
+};
+
 const defaultKeywords = [
   "e-bike shop",
   "electric bike store",
@@ -51,6 +57,111 @@ const defaultAreas = [
   "Trento, Trentino-Alto Adige, Italy",
   "Bolzano, Trentino-Alto Adige, Italy",
 ].join("\n");
+
+const northItalyRegions: RegionOption[] = [
+  {
+    id: "lombardia",
+    name: "Lombardia",
+    cities: [
+      "Milano, Lombardia, Italy",
+      "Bergamo, Lombardia, Italy",
+      "Brescia, Lombardia, Italy",
+      "Como, Lombardia, Italy",
+      "Monza, Lombardia, Italy",
+      "Pavia, Lombardia, Italy",
+      "Varese, Lombardia, Italy",
+      "Lecco, Lombardia, Italy",
+      "Lodi, Lombardia, Italy",
+      "Cremona, Lombardia, Italy",
+      "Mantova, Lombardia, Italy",
+      "Sondrio, Lombardia, Italy",
+    ],
+  },
+  {
+    id: "piemonte",
+    name: "Piemonte",
+    cities: [
+      "Torino, Piemonte, Italy",
+      "Novara, Piemonte, Italy",
+      "Alessandria, Piemonte, Italy",
+      "Cuneo, Piemonte, Italy",
+      "Asti, Piemonte, Italy",
+      "Biella, Piemonte, Italy",
+      "Vercelli, Piemonte, Italy",
+      "Verbania, Piemonte, Italy",
+    ],
+  },
+  {
+    id: "veneto",
+    name: "Veneto",
+    cities: [
+      "Venezia, Veneto, Italy",
+      "Verona, Veneto, Italy",
+      "Padova, Veneto, Italy",
+      "Vicenza, Veneto, Italy",
+      "Treviso, Veneto, Italy",
+      "Rovigo, Veneto, Italy",
+      "Belluno, Veneto, Italy",
+    ],
+  },
+  {
+    id: "emilia-romagna",
+    name: "Emilia-Romagna",
+    cities: [
+      "Bologna, Emilia-Romagna, Italy",
+      "Modena, Emilia-Romagna, Italy",
+      "Parma, Emilia-Romagna, Italy",
+      "Reggio Emilia, Emilia-Romagna, Italy",
+      "Piacenza, Emilia-Romagna, Italy",
+      "Ferrara, Emilia-Romagna, Italy",
+      "Ravenna, Emilia-Romagna, Italy",
+      "Rimini, Emilia-Romagna, Italy",
+      "Forli, Emilia-Romagna, Italy",
+      "Cesena, Emilia-Romagna, Italy",
+    ],
+  },
+  {
+    id: "liguria",
+    name: "Liguria",
+    cities: [
+      "Genova, Liguria, Italy",
+      "La Spezia, Liguria, Italy",
+      "Savona, Liguria, Italy",
+      "Imperia, Liguria, Italy",
+      "Sanremo, Liguria, Italy",
+    ],
+  },
+  {
+    id: "trentino-alto-adige",
+    name: "Trentino-Alto Adige",
+    cities: [
+      "Trento, Trentino-Alto Adige, Italy",
+      "Bolzano, Trentino-Alto Adige, Italy",
+      "Merano, Trentino-Alto Adige, Italy",
+      "Rovereto, Trentino-Alto Adige, Italy",
+      "Bressanone, Trentino-Alto Adige, Italy",
+    ],
+  },
+  {
+    id: "friuli-venezia-giulia",
+    name: "Friuli-Venezia Giulia",
+    cities: [
+      "Trieste, Friuli-Venezia Giulia, Italy",
+      "Udine, Friuli-Venezia Giulia, Italy",
+      "Pordenone, Friuli-Venezia Giulia, Italy",
+      "Gorizia, Friuli-Venezia Giulia, Italy",
+    ],
+  },
+  {
+    id: "valle-daosta",
+    name: "Valle d'Aosta",
+    cities: [
+      "Aosta, Valle d'Aosta, Italy",
+      "Courmayeur, Valle d'Aosta, Italy",
+      "Saint-Vincent, Valle d'Aosta, Italy",
+    ],
+  },
+];
 
 const sampleLeads: Lead[] = [
   {
@@ -108,9 +219,19 @@ const sampleLeads: Lead[] = [
 
 function splitLines(value: string) {
   return value
-    .split(/\n|,/)
+    .split("\n")
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+function dedupeAreas(items: string[]) {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    const key = item.toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function csvEscape(value: unknown) {
@@ -160,10 +281,18 @@ export default function Home() {
   });
   const [keywords, setKeywords] = useState(defaultKeywords);
   const [areas, setAreas] = useState(defaultAreas);
+  const [selectedRegionId, setSelectedRegionId] = useState(northItalyRegions[0].id);
+  const [selectedCity, setSelectedCity] = useState(northItalyRegions[0].cities[0]);
   const [pages, setPages] = useState(2);
   const [languageCode, setLanguageCode] = useState("it");
-  const [onlyWithPhone, setOnlyWithPhone] = useState(false);
   const [query, setQuery] = useState("");
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [areaFilter, setAreaFilter] = useState("all");
+  const [keywordFilter, setKeywordFilter] = useState("all");
+  const [phoneFilter, setPhoneFilter] = useState("all");
+  const [websiteFilter, setWebsiteFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [minRating, setMinRating] = useState("all");
   const [leads, setLeads] = useState<Lead[]>([]);
   const [summary, setSummary] = useState<SearchSummary | null>(null);
   const [selectedId, setSelectedId] = useState<string>("");
@@ -179,15 +308,64 @@ export default function Home() {
     }
   }, [apiKey, rememberKey]);
 
+  const selectedRegion =
+    northItalyRegions.find((region) => region.id === selectedRegionId) ??
+    northItalyRegions[0];
+
+  const selectedAreas = useMemo(() => dedupeAreas(splitLines(areas)), [areas]);
+
+  const filterOptions = useMemo(() => {
+    const leadAreas = new Set<string>();
+    const leadKeywords = new Set<string>();
+    const statuses = new Set<string>();
+
+    for (const lead of leads) {
+      for (const area of lead.matchedAreas) leadAreas.add(area);
+      for (const keyword of lead.matchedKeywords) leadKeywords.add(keyword);
+      if (lead.businessStatus) statuses.add(lead.businessStatus);
+    }
+
+    return {
+      areas: Array.from(leadAreas).sort((a, b) => a.localeCompare(b)),
+      keywords: Array.from(leadKeywords).sort((a, b) => a.localeCompare(b)),
+      statuses: Array.from(statuses).sort((a, b) => a.localeCompare(b)),
+    };
+  }, [leads]);
+
+  const activeFilterCount = useMemo(() => {
+    return [
+      areaFilter !== "all",
+      keywordFilter !== "all",
+      phoneFilter !== "all",
+      websiteFilter !== "all",
+      statusFilter !== "all",
+      minRating !== "all",
+    ].filter(Boolean).length;
+  }, [areaFilter, keywordFilter, minRating, phoneFilter, statusFilter, websiteFilter]);
+
   const filteredLeads = useMemo(() => {
     const term = query.trim().toLowerCase();
+    const ratingThreshold = minRating === "all" ? 0 : Number(minRating);
+
     return leads.filter((lead) => {
-      if (onlyWithPhone && !lead.phone && !lead.internationalPhone) return false;
+      const hasPhone = Boolean(lead.phone || lead.internationalPhone);
+      const hasWebsite = Boolean(lead.website);
+
+      if (phoneFilter === "with" && !hasPhone) return false;
+      if (phoneFilter === "without" && hasPhone) return false;
+      if (websiteFilter === "with" && !hasWebsite) return false;
+      if (websiteFilter === "without" && hasWebsite) return false;
+      if (areaFilter !== "all" && !lead.matchedAreas.includes(areaFilter)) return false;
+      if (keywordFilter !== "all" && !lead.matchedKeywords.includes(keywordFilter)) return false;
+      if (statusFilter !== "all" && lead.businessStatus !== statusFilter) return false;
+      if (ratingThreshold && (lead.rating ?? 0) < ratingThreshold) return false;
       if (!term) return true;
+
       return [
         lead.name,
         lead.address,
         lead.phone,
+        lead.internationalPhone,
         lead.website,
         lead.matchedKeywords.join(" "),
         lead.matchedAreas.join(" "),
@@ -196,7 +374,16 @@ export default function Home() {
         .toLowerCase()
         .includes(term);
     });
-  }, [leads, onlyWithPhone, query]);
+  }, [
+    areaFilter,
+    keywordFilter,
+    leads,
+    minRating,
+    phoneFilter,
+    query,
+    statusFilter,
+    websiteFilter,
+  ]);
 
   const selectedLead =
     filteredLeads.find((lead) => lead.id === selectedId) ?? filteredLeads[0];
@@ -211,6 +398,35 @@ export default function Home() {
       shown: filteredLeads.length,
     };
   }, [filteredLeads.length, leads]);
+
+  function setAreaList(items: string[]) {
+    setAreas(dedupeAreas(items).join("\n"));
+  }
+
+  function addAreas(items: string[]) {
+    setAreaList([...selectedAreas, ...items]);
+  }
+
+  function removeArea(area: string) {
+    setAreaList(selectedAreas.filter((item) => item !== area));
+  }
+
+  function handleRegionChange(regionId: string) {
+    const nextRegion =
+      northItalyRegions.find((region) => region.id === regionId) ??
+      northItalyRegions[0];
+    setSelectedRegionId(nextRegion.id);
+    setSelectedCity(nextRegion.cities[0]);
+  }
+
+  function resetResultFilters() {
+    setAreaFilter("all");
+    setKeywordFilter("all");
+    setPhoneFilter("all");
+    setWebsiteFilter("all");
+    setStatusFilter("all");
+    setMinRating("all");
+  }
 
   async function runSearch() {
     setMessage("");
@@ -228,7 +444,7 @@ export default function Home() {
     }
 
     const keywordList = splitLines(keywords);
-    const areaList = splitLines(areas);
+    const areaList = selectedAreas;
 
     if (!keywordList.length || !areaList.length) {
       setMessage("请至少保留一个搜索关键词和一个地区。");
@@ -439,15 +655,87 @@ export default function Home() {
               onChange={(event) => setKeywords(event.target.value)}
               rows={6}
             />
+            <div className="area-builder">
+              <div className="section-title compact-title">
+                <span>地区选择</span>
+                <span className="subtle">{selectedAreas.length} 个地区</span>
+              </div>
+              <div className="area-controls">
+                <label>
+                  <span className="field-label">大区</span>
+                  <select
+                    className="input"
+                    value={selectedRegionId}
+                    onChange={(event) => handleRegionChange(event.target.value)}
+                  >
+                    {northItalyRegions.map((region) => (
+                      <option key={region.id} value={region.id}>
+                        {region.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  <span className="field-label">城市</span>
+                  <select
+                    className="input"
+                    value={selectedCity}
+                    onChange={(event) => setSelectedCity(event.target.value)}
+                  >
+                    {selectedRegion.cities.map((city) => (
+                      <option key={city} value={city}>
+                        {city.replace(", Italy", "")}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              <div className="area-actions">
+                <button
+                  className="secondary-button small"
+                  type="button"
+                  onClick={() => addAreas([selectedCity])}
+                >
+                  添加城市
+                </button>
+                <button
+                  className="secondary-button small"
+                  type="button"
+                  onClick={() => addAreas(selectedRegion.cities)}
+                >
+                  加入该大区
+                </button>
+              <button
+                className="ghost-button"
+                type="button"
+                onClick={() => setAreas("")}
+              >
+                清空
+                </button>
+              </div>
+              <div className="selected-areas" aria-label="已选地区">
+                {selectedAreas.map((area) => (
+                  <button key={area} type="button" onClick={() => removeArea(area)}>
+                    <span>{area.replace(", Italy", "")}</span>
+                    <strong aria-hidden="true">x</strong>
+                  </button>
+                ))}
+                {!selectedAreas.length ? (
+                  <p>还没有选择地区。可以从上面的列表添加，也可以直接手动输入。</p>
+                ) : null}
+              </div>
+            </div>
             <label className="field-label" htmlFor="areas">
-              地区，每行一个
+              手动编辑地区，每行一个
             </label>
             <textarea
               id="areas"
-              className="textarea"
+              className="textarea area-textarea"
               value={areas}
-              onChange={(event) => setAreas(event.target.value)}
-              rows={7}
+              onChange={(event) =>
+                setAreas(dedupeAreas(splitLines(event.target.value)).join("\n"))
+              }
+              rows={5}
             />
             <div className="mt-3 grid grid-cols-2 gap-3">
               <label>
@@ -600,14 +888,14 @@ export default function Home() {
                   onChange={(event) => setQuery(event.target.value)}
                   placeholder="筛选名称、地址、关键词"
                 />
-                <label className="check-row compact">
-                  <input
-                    type="checkbox"
-                    checked={onlyWithPhone}
-                    onChange={(event) => setOnlyWithPhone(event.target.checked)}
-                  />
-                  <span>只看有电话</span>
-                </label>
+                <button
+                  className={`filter-toggle ${filtersOpen ? "active" : ""}`}
+                  type="button"
+                  onClick={() => setFiltersOpen((open) => !open)}
+                >
+                  筛选
+                  {activeFilterCount ? <span>{activeFilterCount}</span> : null}
+                </button>
                 <button
                   className="secondary-button small"
                   type="button"
@@ -626,6 +914,100 @@ export default function Home() {
                 </button>
               </div>
             </div>
+            {filtersOpen ? (
+              <div className="filter-panel">
+                <div className="filter-header">
+                  <span>结果筛选</span>
+                  <button className="ghost-button" type="button" onClick={resetResultFilters}>
+                    重置
+                  </button>
+                </div>
+                <div className="filter-grid">
+                  <label>
+                    <span className="field-label">地区</span>
+                    <select
+                      className="input"
+                      value={areaFilter}
+                      onChange={(event) => setAreaFilter(event.target.value)}
+                    >
+                      <option value="all">全部地区</option>
+                      {filterOptions.areas.map((area) => (
+                        <option key={area} value={area}>
+                          {area.replace(", Italy", "")}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    <span className="field-label">关键词</span>
+                    <select
+                      className="input"
+                      value={keywordFilter}
+                      onChange={(event) => setKeywordFilter(event.target.value)}
+                    >
+                      <option value="all">全部关键词</option>
+                      {filterOptions.keywords.map((keyword) => (
+                        <option key={keyword} value={keyword}>
+                          {keyword}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    <span className="field-label">电话</span>
+                    <select
+                      className="input"
+                      value={phoneFilter}
+                      onChange={(event) => setPhoneFilter(event.target.value)}
+                    >
+                      <option value="all">全部</option>
+                      <option value="with">有电话</option>
+                      <option value="without">无电话</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span className="field-label">网站</span>
+                    <select
+                      className="input"
+                      value={websiteFilter}
+                      onChange={(event) => setWebsiteFilter(event.target.value)}
+                    >
+                      <option value="all">全部</option>
+                      <option value="with">有网站</option>
+                      <option value="without">无网站</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span className="field-label">最低评分</span>
+                    <select
+                      className="input"
+                      value={minRating}
+                      onChange={(event) => setMinRating(event.target.value)}
+                    >
+                      <option value="all">不限</option>
+                      <option value="4.5">4.5+</option>
+                      <option value="4">4.0+</option>
+                      <option value="3.5">3.5+</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span className="field-label">经营状态</span>
+                    <select
+                      className="input"
+                      value={statusFilter}
+                      onChange={(event) => setStatusFilter(event.target.value)}
+                    >
+                      <option value="all">全部状态</option>
+                      {filterOptions.statuses.map((status) => (
+                        <option key={status} value={status}>
+                          {compactStatus(status)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+              </div>
+            ) : null}
             <div className="table-wrap">
               <table>
                 <thead>

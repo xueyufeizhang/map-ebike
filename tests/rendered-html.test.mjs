@@ -33,7 +33,11 @@ test("server-renders the e-bike lead finder shell", async () => {
   assert.match(html, /电动自行车商家搜索台/);
   assert.match(html, /Places API/);
   assert.match(html, /Maps 网页/);
+  assert.match(html, /地区选择/);
+  assert.match(html, /Lombardia/);
+  assert.match(html, /筛选/);
   assert.match(html, /商家名单/);
+  assert.doesNotMatch(html, /加入热门/);
   assert.doesNotMatch(html, /codex-preview|SkeletonPreview|react-loading-skeleton/);
 });
 
