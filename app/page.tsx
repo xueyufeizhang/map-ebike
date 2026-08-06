@@ -147,60 +147,6 @@ const northItalyRegions: RegionOption[] = [
   },
 ];
 
-const sampleLeads: Lead[] = [
-  {
-    id: "sample-milano",
-    name: "Sample E-Bike Milano",
-    phone: "+39 02 0000 1000",
-    internationalPhone: "+39 02 0000 1000",
-    address: "Milano, Lombardia, Italy",
-    website: "https://example.com/milano",
-    mapsUrl: "https://maps.google.com/?q=e-bike+Milano",
-    rating: 4.6,
-    reviews: 142,
-    lat: 45.4642,
-    lng: 9.19,
-    businessStatus: "OPERATIONAL",
-    types: ["bicycle_store", "store"],
-    matchedKeywords: ["e-bike shop"],
-    matchedAreas: ["Milano"],
-  },
-  {
-    id: "sample-torino",
-    name: "Sample Bike Torino",
-    phone: "",
-    internationalPhone: "",
-    address: "Torino, Piemonte, Italy",
-    website: "",
-    mapsUrl: "https://maps.google.com/?q=e-bike+Torino",
-    rating: 4.3,
-    reviews: 76,
-    lat: 45.0703,
-    lng: 7.6869,
-    businessStatus: "OPERATIONAL",
-    types: ["bicycle_store"],
-    matchedKeywords: ["bici elettriche"],
-    matchedAreas: ["Torino"],
-  },
-  {
-    id: "sample-verona",
-    name: "Sample Electric Wheels Verona",
-    phone: "+39 045 000 2000",
-    internationalPhone: "+39 045 000 2000",
-    address: "Verona, Veneto, Italy",
-    website: "https://example.com/verona",
-    mapsUrl: "https://maps.google.com/?q=e-bike+Verona",
-    rating: 4.8,
-    reviews: 51,
-    lat: 45.4384,
-    lng: 10.9916,
-    businessStatus: "OPERATIONAL",
-    types: ["store"],
-    matchedKeywords: ["electric bike store"],
-    matchedAreas: ["Verona"],
-  },
-];
-
 function splitLines(value: string) {
   return value
     .split("\n")
@@ -224,6 +170,102 @@ function csvEscape(value: unknown) {
     return `"${text.replaceAll('"', '""')}"`;
   }
   return text;
+}
+
+function parseCsvRows(csv: string) {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let cell = "";
+  let inQuotes = false;
+
+  for (let index = 0; index < csv.length; index += 1) {
+    const character = csv[index];
+    const nextCharacter = csv[index + 1];
+
+    if (character === '"' && inQuotes && nextCharacter === '"') {
+      cell += '"';
+      index += 1;
+      continue;
+    }
+
+    if (character === '"') {
+      inQuotes = !inQuotes;
+      continue;
+    }
+
+    if (character === "," && !inQuotes) {
+      row.push(cell);
+      cell = "";
+      continue;
+    }
+
+    if ((character === "\n" || character === "\r") && !inQuotes) {
+      if (character === "\r" && nextCharacter === "\n") {
+        index += 1;
+      }
+      row.push(cell);
+      if (row.some((value) => value.trim())) {
+        rows.push(row);
+      }
+      row = [];
+      cell = "";
+      continue;
+    }
+
+    cell += character;
+  }
+
+  row.push(cell);
+  if (row.some((value) => value.trim())) {
+    rows.push(row);
+  }
+
+  return rows;
+}
+
+function parseNumber(value: string) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function splitCsvList(value: string) {
+  return value
+    .split(";")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function leadsFromCsv(csv: string): Lead[] {
+  const rows = parseCsvRows(csv.replace(/^\uFEFF/, ""));
+  const headers = rows[0] ?? [];
+  const headerIndex = new Map(headers.map((header, index) => [header, index]));
+
+  const valueAt = (row: string[], header: string) =>
+    row[headerIndex.get(header) ?? -1]?.trim() ?? "";
+
+  return rows.slice(1).map((row, index) => {
+    const name = valueAt(row, "Name");
+    const address = valueAt(row, "Address");
+    const mapsUrl = valueAt(row, "Google Maps");
+
+    return {
+      id: mapsUrl || `${name}-${address}-${index}`,
+      name,
+      phone: valueAt(row, "Phone"),
+      internationalPhone: valueAt(row, "International Phone"),
+      address,
+      website: valueAt(row, "Website"),
+      mapsUrl,
+      rating: parseNumber(valueAt(row, "Rating")),
+      reviews: parseNumber(valueAt(row, "Reviews")),
+      lat: parseNumber(valueAt(row, "Latitude")),
+      lng: parseNumber(valueAt(row, "Longitude")),
+      businessStatus: valueAt(row, "Business Status"),
+      matchedKeywords: splitCsvList(valueAt(row, "Matched Keywords")),
+      matchedAreas: splitCsvList(valueAt(row, "Matched Areas")),
+      types: splitCsvList(valueAt(row, "Types")),
+    };
+  });
 }
 
 function downloadBlob(blob: Blob, filename: string) {
@@ -545,6 +587,26 @@ export default function Home() {
     downloadBlob(blob, "italy-ebike-leads.xlsx");
   }
 
+  async function loadExampleData() {
+    setMessage("");
+
+    try {
+      const response = await fetch("/example-leads.csv");
+      if (!response.ok) {
+        throw new Error("示例数据文件读取失败。");
+      }
+
+      const csv = await response.text();
+      const exampleLeads = leadsFromCsv(csv);
+      setLeads(exampleLeads);
+      setSelectedId("");
+      setCurrentPage(1);
+      setMessage(`已载入 ${exampleLeads.length} 条真实示例数据，不会调用 API。`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "示例数据载入失败。");
+    }
+  }
+
   return (
     <main className="min-h-screen bg-[#f7f7f2] text-[#17201c]">
       <section className="border-b border-[#d8d7cb] bg-[#fbfbf6]">
@@ -556,9 +618,6 @@ export default function Home() {
             <h1 className="mt-2 text-3xl font-semibold text-[#17201c] sm:text-4xl">
               电动自行车商家搜索台
             </h1>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-[#5c6258]">
-              输入关键词和地区，用 Google Places API 批量搜索商家电话，并整理成可筛选、可导出的名单。
-            </p>
           </div>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <Stat label="结果" value={stats.total} />
@@ -755,10 +814,7 @@ export default function Home() {
             <button
               className="secondary-button mt-2"
               type="button"
-              onClick={() => {
-                setLeads(sampleLeads);
-                setMessage("已载入示例数据，用于预览界面和测试导出。");
-              }}
+              onClick={loadExampleData}
             >
               载入示例数据
             </button>
